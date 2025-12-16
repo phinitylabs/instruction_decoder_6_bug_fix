@@ -13,3 +13,4 @@ HUD format problem for instruction decoder implementation.
 - `instruction_decoder_6_baseline` - Starting point for agent (baseline code, no tests)
 - `instruction_decoder_6_test` - Baseline code + test files
 - `instruction_decoder_6_golden` - Complete solution (no tests)
+
