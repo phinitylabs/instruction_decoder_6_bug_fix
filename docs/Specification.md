@@ -1,5 +1,3 @@
-Design a fully combinational instruction-decoding block that receives a 5-bit opcode, a condition-code bit, and an instruction-enable signal, and produces all internal control signals for the microcode sequencer, stack subsystem, register subsystem, arithmetic datapath selectors, and program-counter steering logic.
-
 The module outputs a valid set of outputs only when the identification value is 6.
 
 When the module does not receive a valid identification code , the following behaviour is exhibited :
