@@ -10,7 +10,7 @@ from cocotb_tools.runner import get_runner
 # ------------------------------------------------------------
 
 # The "Disabled" or "Default" output state as per RTL and Spec
-# (matches ID != 6 and case default)
+# Matches ID != 6 and case default (where signals are zeroed/safe)
 EXPECTED_DEFAULT = {
     "rst": 0, "out_ce": 0, "rsel": 0, "rce": 0, "cen": 0,
     "stack_re": 0, "pop": 0, "stack_we": 0,
@@ -19,15 +19,35 @@ EXPECTED_DEFAULT = {
     "src_sel": 0, "push": 0
 }
 
-# List of valid 7-bit patterns {instr_in, cc_in, instr_en} defined in RTL
-# Used to skip known valid instructions when testing the 'default' case
+# ------------------------------------------------------------
+# Valid Pattern List (Updated)
+# ------------------------------------------------------------
+# This list contains every 7-bit input combination {instr_in, cc_in, instr_en}
+# that is considered a valid instruction by the spec/RTL.
+# All unconditional instructions appear twice (cc_in=0 and cc_in=1).
 VALID_PATTERNS = [
-    0b0110101,  # Instr Disable
-    0b1011000,  # JSB R
-    0b1011100,  # JSB D
-    0b1100000,  # JSB 0
-    0b1100100,  # JSB R+D
-    0b1101000   # JSB PC+D
+    # 1. Instruction Disable (Explicit pattern: 01101 | 0 | 1)
+    0b0110101,
+
+    # 2. JSB R (10110 | ? | 0)
+    0b1011000, # cc_in = 0
+    0b1011010, # cc_in = 1
+
+    # 3. JSB D (10111 | ? | 0)
+    0b1011100, # cc_in = 0
+    0b1011110, # cc_in = 1
+
+    # 4. JSB 0 (11000 | ? | 0)
+    0b1100000, # cc_in = 0
+    0b1100010, # cc_in = 1
+
+    # 5. JSB R+D (11001 | ? | 0)
+    0b1100100, # cc_in = 0
+    0b1100110, # cc_in = 1
+
+    # 6. JSB PC+D (11010 | ? | 0)
+    0b1101000, # cc_in = 0
+    0b1101010  # cc_in = 1
 ]
 
 async def check_outputs(dut, exp, label=""):
@@ -117,7 +137,7 @@ async def test_undefined_instruction_sweep(dut):
 
         await Timer(2, units='ns')
 
-        label = f"Valid ID, Invalid Pattern: {pattern:07b}"
+        label = f"Valid ID, Invalid Pattern: {pattern:07b} ({p_instr:05b}_{p_cc}_{p_en})"
         await check_outputs(dut, EXPECTED_DEFAULT, label)
 
 
@@ -159,7 +179,7 @@ async def test_jsb_r(dut):
         "oen":1, "pc_mux_sel":0, "inc":1,
         "src_sel":0, "push":1, "stack_we":1
     }
-
+    # Test nominal case (cc=0)
     await run_instr(
         dut,
         instr=0b10110,
@@ -169,6 +189,8 @@ async def test_jsb_r(dut):
         label="JSB R (1011000)"
     )
 
+    #Verify cc=1 works explicitly as well
+    await run_instr(dut, 0b10110, 1, 0, expected, "JSB R (cc=1)")
 
 # 3) JSB D — 7'b1011100
 @cocotb.test()
