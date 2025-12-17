@@ -1,3 +1,4 @@
-The Verilog RTL module for the microcode sequencer located at source/instruction_decoder_6.v is failing simulation. Specifically, the simulation fails during the 'Instruction Disable' test.
+The Verilog RTL module for the microcode sequencer located at source/instruction_decoder_6.v is failing simulation. 
+The simulation fails at the first test which sends opcode 13.
 
-Please analyze, debug, and fix the RTL file. The specification is available at docs/Specification.md.
+Debug and completely fix the RTL file based on the specification which is available at docs/Specification.md.
