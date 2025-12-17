@@ -2,3 +2,4 @@ The Verilog RTL module for the microcode sequencer located at source/instruction
 The simulation fails at the testcase that generates random combination of inputs. It fails with the error that expected oen value is not equal to the actual oen value.
 
 Debug and fix the RTL file based on the specification which is available at docs/Specification.md.
+The updated RTL should not have any errors or warnings in lint, simulation or synthesis.
