@@ -6,46 +6,43 @@ from pathlib import Path
 from cocotb_tools.runner import get_runner
 
 # ------------------------------------------------------------
-# Helper: check outputs
+# Constants & Helpers
 # ------------------------------------------------------------
-async def check_outputs(dut, exp, label=""):
-    await Timer(1, units="ns")
 
+# The "Disabled" or "Default" output state as per RTL and Spec
+# (matches ID != 6 and case default)
+EXPECTED_DEFAULT = {
+    "rst": 0, "out_ce": 0, "rsel": 0, "rce": 0, "cen": 0,
+    "stack_re": 0, "pop": 0, "stack_we": 0,
+    "a_mux_sel": 2, "b_mux_sel": 2,
+    "oen": 0, "pc_mux_sel": 0, "inc": 0,
+    "src_sel": 0, "push": 0
+}
+
+# List of valid 7-bit patterns {instr_in, cc_in, instr_en} defined in RTL
+# Used to skip known valid instructions when testing the 'default' case
+VALID_PATTERNS = [
+    0b0110101,  # Instr Disable
+    0b1011000,  # JSB R
+    0b1011100,  # JSB D
+    0b1100000,  # JSB 0
+    0b1100100,  # JSB R+D
+    0b1101000   # JSB PC+D
+]
+
+async def check_outputs(dut, exp, label=""):
+    """Helper to compare DUT outputs against an expected dictionary."""
+    await Timer(1, units="ns")
+    
+    # Iterate over expected items and assert equality
     for signal, expected in exp.items():
         actual = int(getattr(dut, signal).value)
         assert actual == expected, (
             f"{label}: {signal} expected {expected}, got {actual}"
         )
 
-
-# ------------------------------------------------------------
-# Test 0 – Decoder disabled when ID != 110
-# ------------------------------------------------------------
-@cocotb.test()
-async def test_id_disable(dut):
-
-    dut.id.value = 0b000     # not 110
-    dut.instr_in.value = 0
-    dut.cc_in.value = 0
-    dut.instr_en.value = 0
-
-    await Timer(2, units='ns')
-
-    expected = {
-        "rst":0, "out_ce":0, "rsel":0, "rce":0, "cen":0,
-        "stack_re":0, "pop":0, "stack_we":0,
-        "a_mux_sel":2, "b_mux_sel":2,
-        "oen":0, "pc_mux_sel":0, "inc":0,
-        "src_sel":0, "push":0
-    }
-
-    await check_outputs(dut, expected, "ID != 110 → disabled")
-
-
-# ------------------------------------------------------------
-# Helper: run instruction with ID = 110
-# ------------------------------------------------------------
 async def run_instr(dut, instr, cc, en, expected, label):
+    """Helper to drive a specific valid instruction."""
     dut.id.value = 0b110
     dut.instr_in.value = instr
     dut.cc_in.value = cc
@@ -53,6 +50,75 @@ async def run_instr(dut, instr, cc, en, expected, label):
 
     await Timer(2, units='ns')
     await check_outputs(dut, expected, label)
+
+
+# ------------------------------------------------------------
+# Robustness Test 1: ID Sweep (0-7)
+# ------------------------------------------------------------
+@cocotb.test()
+async def test_id_mismatch_sweep(dut):
+    """
+    Verify that for any ID != 6 (0,1,2,3,4,5,7), the decoder is disabled
+    regardless of the instruction inputs.
+    """
+    dut._log.info("Starting ID mismatch sweep...")
+
+    for id_val in range(8):
+        # Skip the valid ID (6) as that is covered by instruction tests
+        if id_val == 6:
+            continue
+
+        dut.id.value = id_val
+        
+        # Test multiple random inputs for each invalid ID to ensure robustness
+        for _ in range(5):
+            rand_instr = random.randint(0, 31)
+            rand_cc = random.randint(0, 1)
+            rand_en = random.randint(0, 1)
+
+            dut.instr_in.value = rand_instr
+            dut.cc_in.value = rand_cc
+            dut.instr_en.value = rand_en
+
+            await Timer(2, units='ns')
+            
+            label = f"ID={id_val} (Mismatch) Input={rand_instr:05b}_{rand_cc}_{rand_en}"
+            await check_outputs(dut, EXPECTED_DEFAULT, label)
+
+# ------------------------------------------------------------
+# Robustness Test 2: Undefined Instruction Sweep (Default Case)
+# ------------------------------------------------------------
+@cocotb.test()
+async def test_undefined_instruction_sweep(dut):
+    """
+    Verify that even with Valid ID=6, any 7-bit instruction pattern 
+    NOT in the valid list triggers the default (disabled) state.
+    """
+    dut._log.info("Starting Undefined Instruction (Default Case) sweep...")
+    
+    dut.id.value = 0b110  # Set Valid ID
+
+    # Iterate through all possible 7-bit combinations (0 to 127)
+    for pattern in range(128):
+        
+        # Skip if this pattern is actually a valid instruction
+        if pattern in VALID_PATTERNS:
+            continue
+
+        # Decode pattern back to inputs for driving
+        # Pattern structure: {instr_in[4:0], cc_in, instr_en}
+        p_instr = (pattern >> 2) & 0x1F
+        p_cc    = (pattern >> 1) & 0x1
+        p_en    = pattern & 0x1
+
+        dut.instr_in.value = p_instr
+        dut.cc_in.value = p_cc
+        dut.instr_en.value = p_en
+
+        await Timer(2, units='ns')
+
+        label = f"Valid ID, Invalid Pattern: {pattern:07b}"
+        await check_outputs(dut, EXPECTED_DEFAULT, label)
 
 
 # ------------------------------------------------------------
